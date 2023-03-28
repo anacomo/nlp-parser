@@ -3,6 +3,7 @@ from tabulate import tabulate
 import copy
 import re
 
+# grammar text - pefferably do not use |
 PRODUCTIONS = """S -> NP VP
 S -> VP
 NP -> DT NN
@@ -49,11 +50,82 @@ def show_table(table: dict) -> None:
     print(tabulate(show, headers=['Symbol', 'Left corner'],
                    tablefmt='simple_outline'))
 
+
+# * calculate the left corner table
+TABLE = create_left_corner_table(PRODUCTIONS)
+
+class TreeNode:
+    def __init__(self, symbol: str, parent: str, children: list):
+        self.symbol = symbol
+        self.parent = parent
+        self.children = children
+
+    def __str__(self) -> str:
+        return ' (' + self.symbol + \
+            ''.join([str(c) for c in self.children]) + ')'
+
+# bottom up search
+def get_parent_chain(symbol: str):
+    chain = [parent for parent in TABLE if symbol in TABLE[parent]]
+    return list(set(chain))
+
+
+def compute_sequence(parent:str, node_string:str):
+    for production in PRODUCTIONS:
+        nonterminal, sequence = production.split(' -> ')
+
+        if nonterminal == parent:
+            sequences = sequence.split('|')
+            for seq in sequences:
+                s = re.sub('\'', '', seq).split()
+                if node_string == s[0]:
+                    return s
+
+
+def search(word: str, root: TreeNode, nonterminals_stack: list):
+    word_node = TreeNode(word, None, [])
+
+    # bottom up search until we find S
+    if word == root.symbol:
+        return [root]
+
+    parent_chain: list(str) = get_parent_chain(word)
+    parsed = []
+
+    for parent in parent_chain:
+        parent_nodes = search(parent, root, nonterminals_stack)
+        for parent_node in parent_nodes:
+            n1 = copy.deepcopy(word_node)
+            n1.parent = parent_node
+            parent_node.children.append(n1)
+            sequence = compute_sequence(parent, word)
+
+            for nonterminal in sequence[1:]:
+                n2 = TreeNode(nonterminal, parent_node, [])
+                parent_node.children.append(n2)
+                nonterminals_stack.append(n2)
+            parsed.append(n1)
+
+    return parsed
+
+def parse():
+    i = 0
+    # start with sentence
+    S = TreeNode('S', None, [])
+    nonterminals_stack = [S]
+    while nonterminals_stack and i < len(SENTENCE):
+        node = nonterminals_stack.pop(0)
+        # search for word
+        search(SENTENCE[i], node, nonterminals_stack)
+        i += 1
+    # print the sentence
+    print(S)
+
+
 # * main function
 def main():
-    # * calculate the left corner table
-    TABLE = create_left_corner_table(PRODUCTIONS)
     show_table(TABLE)
+    parse()
 
 if __name__ == "__main__":
     main()
